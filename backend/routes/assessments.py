@@ -6,6 +6,7 @@ prediction engine. Assessment results are persisted to MongoDB and
 high-risk predictions can create alerts.
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from bson import ObjectId
@@ -20,7 +21,12 @@ from backend.models.assessment import (
     AssessmentListQuery,
     AssessmentListResponse,
 )
-from backend.schemas import MachineInput, PredictionResponse
+from backend.schemas import (
+    MachineInput,
+    PredictionResponse,
+    RecommendationDecisionRequest,
+    RecommendationDecisionResponse,
+)
 from backend.model_service import predict_machine
 from backend.db.mongodb import get_collection
 
@@ -180,4 +186,68 @@ async def get_assessment(assessment_id: str):
         anomaly_percentile=assessment.prediction.anomaly_percentile,
         inputs=assessment.inputs,
         prediction=assessment.prediction,
+    )
+
+
+@router.post(
+    "/{assessment_id}/recommendation-decision",
+    response_model=RecommendationDecisionResponse,
+)
+async def recommendation_decision(
+    assessment_id: str,
+    decision: RecommendationDecisionRequest,
+):
+    """
+    Persist the operator's recommendation choice on an assessment.
+
+    The choice is stored as `selectedRecommendationId` together
+    with a `recommendationDecisionTs` ISO timestamp on the
+    assessment document in MongoDB.
+    """
+
+    # Validate the ObjectId before querying MongoDB.
+    if not ObjectId.is_valid(assessment_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid assessment ID",
+        )
+
+    decision_ts = datetime.now(timezone.utc)
+
+    try:
+        assessments_collection = get_collection("assessments")
+
+        existing = await assessments_collection.find_one(
+            {"_id": ObjectId(assessment_id)}
+        )
+
+        if not existing:
+            raise HTTPException(
+                status_code=404,
+                detail="Assessment not found",
+            )
+
+        await assessments_collection.update_one(
+            {"_id": ObjectId(assessment_id)},
+            {
+                "$set": {
+                    "selectedRecommendationId": decision.selectedOptionId,
+                    "recommendationDecisionTs": decision_ts.isoformat(),
+                }
+            },
+        )
+    except HTTPException:
+        # Re-raise client errors (e.g. 404) untouched.
+        raise
+    except Exception:
+        # MongoDB outages must not crash the service.
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable",
+        )
+
+    return RecommendationDecisionResponse(
+        assessmentId=assessment_id,
+        selectedOptionId=decision.selectedOptionId,
+        updatedAt=decision_ts.isoformat(),
     )

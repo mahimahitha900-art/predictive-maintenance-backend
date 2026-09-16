@@ -51,6 +51,24 @@ class Settings(BaseSettings):
         description="Gradio API base URL for fallback predictions",
     )
 
+    # LLM recommendations via OpenRouter (OpenAI-compatible API)
+    OPENROUTER_API_KEY: str = Field(
+        default="",
+        description="OpenRouter API key (empty disables LLM recommendations)",
+    )
+    OPENROUTER_BASE_URL: str = Field(
+        default="https://openrouter.ai/api/v1",
+        description="OpenRouter API base URL",
+    )
+    OPENROUTER_MODEL: str = Field(
+        default="deepseek/deepseek-chat",
+        description="OpenRouter model used for recommendation options",
+    )
+    LLM_TIMEOUT_SECONDS: float = Field(
+        default=20.0,
+        description="Timeout in seconds for OpenRouter chat completions calls",
+    )
+
     # Server
     PORT: int = Field(default=8000, description="Server port")
 

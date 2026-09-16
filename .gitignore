@@ -1,8 +1,7 @@
 venv/
 .venv/
+.venv_bak/
 __pycache__/
 *.pyc
-.pytest_cache/
 .env
-.env.local
-.env.production
+.vscode/

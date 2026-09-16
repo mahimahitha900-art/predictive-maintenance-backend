@@ -278,26 +278,26 @@ def get_maintenance_action(
         }
 
 
-     # -----------------------------------------------------
-     # TWF CONDITION CHECK
-     # -----------------------------------------------------
-     # The trained failure-mode component does not contain
-     # a standalone TWF model because TWF has very few
-     # training examples.
-     #
-     # Therefore, we do NOT create a fake TWF probability.
-     # Instead, when a failure is predicted and tool wear
-     # is very high, we treat it as a condition-based TWF
-     # indication.
-     #
-     # The AI4I dataset associates TWF with high tool wear.
-     # -----------------------------------------------------
+    # -----------------------------------------------------
+    # Prefer a failure mode produced by the trained
+    # failure-mode models (HDF / PWF / OSF) whenever one
+    # carries evidence (probability > 0). This must run
+    # BEFORE the wear-based TWF heuristic so a strong model
+    # signal is never masked by tool wear alone.
+    # -----------------------------------------------------
 
-    if predicted_failure and tool_wear is not None:
-        if tool_wear >= 200:
-            info = FAILURE_MODE_INFO["TWF"]
-            return {
-            "failure_mode": "TWF",
+    mode = get_failure_mode(failure_modes)
+
+    if (
+        mode is not None
+        and mode in FAILURE_MODE_INFO
+        and failure_modes.get(mode, 0) > 0
+    ):
+
+        info = FAILURE_MODE_INFO[mode]
+
+        return {
+            "failure_mode": mode,
             "failure_mode_name": info["name"],
             "explanation": info["explanation"],
             "maintenance_recommendation": info["recommendation"]
@@ -305,10 +305,30 @@ def get_maintenance_action(
 
 
     # -----------------------------------------------------
-    # Find the failure mode with the highest probability.
+    # TWF CONDITION CHECK
+    # -----------------------------------------------------
+    # The trained failure-mode component does not contain
+    # a standalone TWF model because TWF has very few
+    # training examples.
+    #
+    # Therefore, we do NOT create a fake TWF probability.
+    # Instead, when a failure is predicted and tool wear
+    # is very high, we treat it as a condition-based TWF
+    # indication (fallback, only if no modeled mode has
+    # strong evidence).
+    #
+    # The AI4I dataset associates TWF with high tool wear.
     # -----------------------------------------------------
 
-    mode = get_failure_mode(failure_modes)
+    if predicted_failure and tool_wear is not None:
+        if tool_wear >= 200:
+            info = FAILURE_MODE_INFO["TWF"]
+            return {
+                "failure_mode": "TWF",
+                "failure_mode_name": info["name"],
+                "explanation": info["explanation"],
+                "maintenance_recommendation": info["recommendation"]
+            }
 
 
     # -----------------------------------------------------
